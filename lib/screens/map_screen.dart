@@ -6,7 +6,6 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:weather/weather.dart';
 
-// ignore: constant_identifier_names
 const MAPBOX_ACCESS_TOKEN =
     'pk.eyJ1IjoicGl0bWFjIiwiYSI6ImNsY3BpeWxuczJhOTEzbnBlaW5vcnNwNzMifQ.ncTzM4bW-jpq-hUFutnR1g';
 
@@ -46,7 +45,6 @@ class _MapScreenState extends State<MapScreen> {
         myPosition!.longitude,
       );
 
-      // Actualiza la lista de marcadores de clima
       setState(() {
         weatherMarkers = weatherList.map((weather) {
           return WeatherMarker(
@@ -67,6 +65,22 @@ class _MapScreenState extends State<MapScreen> {
       actual = LatLng(position.latitude, position.longitude);
     });
     await getCurrentWeather();
+  }
+
+  void _onLongPress(BuildContext context, LatLng point) async {
+    // Agregar un nuevo marcador al dejar pulsado
+    Weather weather =
+        await getWeatherByCoordinates(point.latitude, point.longitude);
+    WeatherMarker weatherMarker = WeatherMarker(
+      latitude: point.latitude,
+      longitude: point.longitude,
+      temperature: weather.temperature?.celsius?.round(),
+      weatherMain: weather.weatherMain,
+    );
+
+    setState(() {
+      weatherMarkers.add(weatherMarker);
+    });
   }
 
   @override
@@ -103,10 +117,7 @@ class _MapScreenState extends State<MapScreen> {
             ElevatedButton(
               onPressed: () async {
                 if (cityController.text.isNotEmpty) {
-                  // Obtener el clima de la ciudad ingresada
                   Weather weather = await getWeatherByCity(cityController.text);
-
-                  // Mostrar el clima de la ciudad
                   showWeatherDialog(context, weather);
                 }
               },
@@ -119,8 +130,16 @@ class _MapScreenState extends State<MapScreen> {
       body: myPosition == null
           ? const CircularProgressIndicator()
           : FlutterMap(
+              mapController: mapController,
               options: MapOptions(
-                  center: myPosition, minZoom: 5, maxZoom: 25, zoom: 18),
+                center: myPosition!,
+                minZoom: 5,
+                maxZoom: 25,
+                zoom: 18,
+                onLongPress: (tapPosition, point) {
+                  _onLongPress(context, point);
+                },
+              ),
               nonRotatedChildren: [
                 TileLayer(
                   urlTemplate:
@@ -143,36 +162,33 @@ class _MapScreenState extends State<MapScreen> {
                           ),
                         );
                       },
-                    )
-                  ],
-                ),
-                MarkerLayer(
-                  markers: weatherMarkers.map((marker) {
-                    return Marker(
-                      point: LatLng(marker.latitude!, marker.longitude!),
-                      builder: (context) {
-                        return Container(
-                          child: Column(
-                            children: [
-                              Text(
-                                '${marker.temperature}°C',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.red,
-                                  fontWeight: FontWeight.bold,
+                    ),
+                    for (var marker in weatherMarkers)
+                      Marker(
+                        point: LatLng(marker.latitude!, marker.longitude!),
+                        builder: (context) {
+                          return Container(
+                            child: Column(
+                              children: [
+                                Text(
+                                  '${marker.temperature}°C',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
-                              ),
-                              Icon(
-                                Icons.cloud,
-                                color: Colors.blue,
-                                size: 10,
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    );
-                  }).toList(),
+                                Icon(
+                                  Icons.cloud,
+                                  color: Colors.blue,
+                                  size: 10,
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                  ],
                 ),
               ],
             ),
@@ -234,13 +250,17 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  // Método para obtener el clima por el nombre de la ciudad
   Future<Weather> getWeatherByCity(String cityName) async {
     WeatherFactory wf = WeatherFactory(API_KEY, language: Language.SPANISH);
     return await wf.currentWeatherByCityName(cityName);
   }
 
-  // Método para mostrar el clima en un diálogo
+  Future<Weather> getWeatherByCoordinates(
+      double latitude, double longitude) async {
+    WeatherFactory wf = WeatherFactory(API_KEY, language: Language.SPANISH);
+    return await wf.currentWeatherByLocation(latitude, longitude);
+  }
+
   void showWeatherDialog(BuildContext context, Weather weather) {
     showDialog(
       context: context,
@@ -251,7 +271,6 @@ class _MapScreenState extends State<MapScreen> {
             children: [
               Text('Temperatura: ${weather.temperature?.celsius?.round()}°C'),
               Text('Estado del tiempo: ${weather.weatherMain}'),
-              // Puedes mostrar más detalles del clima según tus necesidades
             ],
           ),
           actions: [
