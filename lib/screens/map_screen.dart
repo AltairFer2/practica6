@@ -1,14 +1,17 @@
+import 'package:animated_floating_buttons/animated_floating_buttons.dart';
+import 'package:clima/data/my_data.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:weather/weather.dart';
 
 // ignore: constant_identifier_names
 const MAPBOX_ACCESS_TOKEN =
     'pk.eyJ1IjoicGl0bWFjIiwiYSI6ImNsY3BpeWxuczJhOTEzbnBlaW5vcnNwNzMifQ.ncTzM4bW-jpq-hUFutnR1g';
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key});
+  const MapScreen({Key? key}) : super(key: key);
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -18,7 +21,10 @@ class _MapScreenState extends State<MapScreen> {
   late String mapStyle;
   late MapController mapController;
   late LatLng actual;
+  late TextEditingController cityController;
   LatLng? myPosition;
+  late WeatherFactory weatherFactory;
+  List<WeatherMarker> weatherMarkers = [];
 
   Future<Position> determinePosition() async {
     LocationPermission permission;
@@ -32,26 +38,35 @@ class _MapScreenState extends State<MapScreen> {
     return await Geolocator.getCurrentPosition();
   }
 
+  Future<void> getCurrentWeather() async {
+    if (myPosition != null) {
+      List<Weather> weatherList =
+          await weatherFactory.fiveDayForecastByLocation(
+        myPosition!.latitude,
+        myPosition!.longitude,
+      );
+
+      // Actualiza la lista de marcadores de clima
+      setState(() {
+        weatherMarkers = weatherList.map((weather) {
+          return WeatherMarker(
+            latitude: weather.latitude,
+            longitude: weather.longitude,
+            temperature: weather.temperature?.celsius?.round(),
+            weatherMain: weather.weatherMain,
+          );
+        }).toList();
+      });
+    }
+  }
+
   void getCurrentLocation() async {
     Position position = await determinePosition();
     setState(() {
-      myPosition = LatLng(position.latitude, position.longitude);   
-      actual = LatLng(position.latitude, position.longitude);   
+      myPosition = LatLng(position.latitude, position.longitude);
+      actual = LatLng(position.latitude, position.longitude);
     });
-  }
-
-   void _moveToCurrentLocation() async {
-    print('Moviendo a la ubicación actual');
-    await getCurrentLocation;
-    _updateMapPosition();
-  }
-
-
-   void _updateMapPosition() {
-    setState(() {
-      // Actualiza la posición del centro del mapa a la ubicación actual
-      actual = LatLng(actual.latitude, actual.longitude);
-    });
+    await getCurrentWeather();
   }
 
   @override
@@ -59,8 +74,9 @@ class _MapScreenState extends State<MapScreen> {
     getCurrentLocation();
     super.initState();
     mapController = MapController();
-    
+    cityController = TextEditingController();
     mapStyle = 'mapbox/streets-v12';
+    weatherFactory = WeatherFactory(API_KEY, language: Language.SPANISH);
   }
 
   @override
@@ -68,7 +84,36 @@ class _MapScreenState extends State<MapScreen> {
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
-        title: const Text('Mapa'),
+        title: Row(
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: TextField(
+                  controller: cityController,
+                  decoration: InputDecoration(
+                    labelText: 'Nombre de la ciudad',
+                    contentPadding:
+                        EdgeInsets.symmetric(vertical: 5.0, horizontal: 10.0),
+                    border: null,
+                  ),
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (cityController.text.isNotEmpty) {
+                  // Obtener el clima de la ciudad ingresada
+                  Weather weather = await getWeatherByCity(cityController.text);
+
+                  // Mostrar el clima de la ciudad
+                  showWeatherDialog(context, weather);
+                }
+              },
+              child: Text('Obtener Clima'),
+            ),
+          ],
+        ),
         backgroundColor: Colors.blueAccent,
       ),
       body: myPosition == null
@@ -100,15 +145,41 @@ class _MapScreenState extends State<MapScreen> {
                       },
                     )
                   ],
-                )
+                ),
+                MarkerLayer(
+                  markers: weatherMarkers.map((marker) {
+                    return Marker(
+                      point: LatLng(marker.latitude!, marker.longitude!),
+                      builder: (context) {
+                        return Container(
+                          child: Column(
+                            children: [
+                              Text(
+                                '${marker.temperature}°C',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Icon(
+                                Icons.cloud,
+                                color: Colors.blue,
+                                size: 10,
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    );
+                  }).toList(),
+                ),
               ],
             ),
-	floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
+      floatingActionButton: AnimatedFloatingActionButton(
+        fabButtons: <Widget>[
           FloatingActionButton(
             onPressed: () {
-              // Cambia al estilo 'mapbox/streets-v12'
               setState(() {
                 mapStyle = 'mapbox/streets-v12';
               });
@@ -116,10 +187,8 @@ class _MapScreenState extends State<MapScreen> {
             tooltip: 'Streets View',
             child: const Icon(Icons.streetview),
           ),
-          const SizedBox(height: 16),
           FloatingActionButton(
             onPressed: () {
-              // Cambia al estilo 'mapbox/light-v11' (Normal)
               setState(() {
                 mapStyle = 'mapbox/light-v11';
               });
@@ -127,10 +196,8 @@ class _MapScreenState extends State<MapScreen> {
             tooltip: 'Normal View',
             child: const Icon(Icons.map),
           ),
-          const SizedBox(height: 16),
           FloatingActionButton(
             onPressed: () {
-              // Cambia al estilo 'mapbox/outdoors-v11' (Terreno)
               setState(() {
                 mapStyle = 'mapbox/outdoors-v11';
               });
@@ -138,10 +205,8 @@ class _MapScreenState extends State<MapScreen> {
             tooltip: 'Terrain View',
             child: const Icon(Icons.terrain),
           ),
-          const SizedBox(height: 16),
           FloatingActionButton(
             onPressed: () {
-              // Cambia al estilo 'mapbox/satellite-streets-v11' (Híbrida)
               setState(() {
                 mapStyle = 'mapbox/satellite-streets-v11';
               });
@@ -149,16 +214,70 @@ class _MapScreenState extends State<MapScreen> {
             tooltip: 'Hybrid View',
             child: const Icon(Icons.satellite),
           ),
-          const SizedBox(height: 16),
           FloatingActionButton(
             onPressed: () {
-              _moveToCurrentLocation();              
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => MapScreen(),
+                ),
+              );
             },
             tooltip: 'Ubicación actual',
             child: const Icon(Icons.my_location),
-          ),                   
+          ),
         ],
+        colorStartAnimation: Colors.blue,
+        colorEndAnimation: Colors.red,
+        animatedIconData: AnimatedIcons.menu_close,
       ),
     );
   }
+
+  // Método para obtener el clima por el nombre de la ciudad
+  Future<Weather> getWeatherByCity(String cityName) async {
+    WeatherFactory wf = WeatherFactory(API_KEY, language: Language.SPANISH);
+    return await wf.currentWeatherByCityName(cityName);
+  }
+
+  // Método para mostrar el clima en un diálogo
+  void showWeatherDialog(BuildContext context, Weather weather) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Clima en ${weather.areaName}'),
+          content: Column(
+            children: [
+              Text('Temperatura: ${weather.temperature?.celsius?.round()}°C'),
+              Text('Estado del tiempo: ${weather.weatherMain}'),
+              // Puedes mostrar más detalles del clima según tus necesidades
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: Text('Cerrar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class WeatherMarker {
+  final double? latitude;
+  final double? longitude;
+  final int? temperature;
+  final String? weatherMain;
+
+  WeatherMarker({
+    required this.latitude,
+    required this.longitude,
+    required this.temperature,
+    required this.weatherMain,
+  });
 }

@@ -110,7 +110,7 @@ class HomeScreen extends StatelessWidget {
                                     ),
                                   );
                                 },
-                                tooltip: 'Normal View',
+                                tooltip: 'Abre el mapa',
                                 child: const Icon(Icons.map),
                               ),
                               // Botón de recarga
@@ -302,17 +302,32 @@ class HomeScreen extends StatelessWidget {
                       ),
                     );
                   } else {
-                    return Scaffold(
-                      body: ElevatedButton(
-                        onPressed: () async {
-                          // Obtener la posición actual
-                          Position currentPosition = await _determinePosition();
-
-                          // Disparar el evento de carga de datos con la nueva posición
-                          BlocProvider.of<WeatherBlocBloc>(context)
-                              .add(FetchWeather(currentPosition));
+                    return Theme(
+                      data: Theme.of(context).copyWith(
+                        // Establece el color de fondo transparente
+                        backgroundColor: Colors.transparent,
+                      ),
+                      child: FutureBuilder(
+                        future: Future.delayed(Duration(seconds: 5)),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState ==
+                              ConnectionState.done) {
+                            // Después de 5 segundos, recargar la pantalla home_screen
+                            return HomeScreen();
+                          } else {
+                            // Muestra un Container con un GIF mientras espera
+                            return Scaffold(
+                              backgroundColor: Colors.transparent,
+                              body: Center(
+                                child: Container(
+                                  width: 480, // Ajusta según tus necesidades
+                                  height: 480, // Ajusta según tus necesidades
+                                  child: Image.asset('assets/loading.gif'),
+                                ),
+                              ),
+                            );
+                          }
                         },
-                        child: Text('Recargar'),
                       ),
                     );
                   }
