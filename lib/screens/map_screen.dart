@@ -232,6 +232,7 @@ class _MapScreenState extends State<MapScreen> {
           ),
           FloatingActionButton(
             onPressed: () {
+              Navigator.pop(context); // Minimiza el Drawer
               Navigator.push(
                 context,
                 MaterialPageRoute(

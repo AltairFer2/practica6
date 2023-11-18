@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:clima/bloc/weather_bloc_bloc.dart';
+import 'package:clima/screens/days_screen.dart';
 import 'package:clima/screens/map_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -42,6 +43,57 @@ class HomeScreen extends StatelessWidget {
         elevation: 0,
         systemOverlayStyle: SystemUiOverlayStyle(
           statusBarBrightness: Brightness.dark,
+        ),
+      ),
+      drawer: Drawer(
+        child: ListView(
+          children: [
+            const UserAccountsDrawerHeader(
+                currentAccountPicture: CircleAvatar(
+                  backgroundImage: NetworkImage('https://i.pravatar.cc/300'),
+                ),
+                accountName: Text('Víctor Fernando Sánchez Alvarado'),
+                accountEmail: Text('20031003@itcelaya.edu.mx')),
+            ListTile(
+              title: Text('Mapa'),
+              onTap: () {
+                // Navega a map_screen.dart aquí
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => MapScreen(),
+                  ),
+                );
+              },
+              leading: const Icon(Icons.map),
+            ),
+            ListTile(
+              title: Text('Recargar'),
+              leading: const Icon(Icons.autorenew),
+              onTap: () async {
+                Navigator.pop(context); // Minimiza el Drawer
+                // Obtener la posición actual
+                Position currentPosition = await _determinePosition();
+
+                // Disparar el evento de carga de datos con la nueva posición
+                BlocProvider.of<WeatherBlocBloc>(context)
+                    .add(FetchWeather(currentPosition));
+              },
+            ),
+            ListTile(
+              title: Text('Clima en 5 días'),
+              onTap: () {
+                // Navega a map_screen.dart aquí
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => DayScreen(),
+                  ),
+                );
+              },
+              leading: const Icon(Icons.map),
+            ),
+          ],
         ),
       ),
       body: Padding(
@@ -99,32 +151,6 @@ class HomeScreen extends StatelessWidget {
                                 style: TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w300),
-                              ),
-                              FloatingActionButton(
-                                onPressed: () {
-                                  // Navega a map_screen.dart aquí
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => MapScreen(),
-                                    ),
-                                  );
-                                },
-                                tooltip: 'Abre el mapa',
-                                child: const Icon(Icons.map),
-                              ),
-                              // Botón de recarga
-                              ElevatedButton(
-                                onPressed: () async {
-                                  // Obtener la posición actual
-                                  Position currentPosition =
-                                      await _determinePosition();
-
-                                  // Disparar el evento de carga de datos con la nueva posición
-                                  BlocProvider.of<WeatherBlocBloc>(context)
-                                      .add(FetchWeather(currentPosition));
-                                },
-                                child: Text('Recargar'),
                               ),
                             ],
                           ),
@@ -316,15 +342,10 @@ class HomeScreen extends StatelessWidget {
                             return HomeScreen();
                           } else {
                             // Muestra un Container con un GIF mientras espera
-                            return Scaffold(
-                              backgroundColor: Colors.transparent,
-                              body: Center(
-                                child: Container(
-                                  width: 480, // Ajusta según tus necesidades
-                                  height: 480, // Ajusta según tus necesidades
-                                  child: Image.asset('assets/loading.gif'),
-                                ),
-                              ),
+                            return Container(
+                              width: 480, // Ajusta según tus necesidades
+                              height: 480, // Ajusta según tus necesidades
+                              child: Image.asset('assets/loading.gif'),
                             );
                           }
                         },
