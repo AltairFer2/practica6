@@ -1,6 +1,10 @@
 import 'package:animated_floating_buttons/animated_floating_buttons.dart';
+import 'package:clima/bloc/weather_bloc_bloc.dart';
 import 'package:clima/data/my_data.dart';
+import 'package:clima/screens/days_screen.dart';
+import 'package:clima/screens/home_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
@@ -127,6 +131,48 @@ class _MapScreenState extends State<MapScreen> {
         ),
         backgroundColor: Colors.blueAccent,
       ),
+      drawer: Drawer(
+        child: ListView(
+          children: [
+            const UserAccountsDrawerHeader(
+                currentAccountPicture: CircleAvatar(
+                  backgroundImage: NetworkImage('https://i.pravatar.cc/300'),
+                ),
+                accountName: Text('Víctor Fernando Sánchez Alvarado'),
+                accountEmail: Text('20031003@itcelaya.edu.mx')),
+            ListTile(
+              title: Text('Clima en 5 días'),
+              onTap: () {
+                // Navega a map_screen.dart aquí
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => DayScreen(),
+                  ),
+                );
+              },
+              leading: const Icon(Icons.map),
+            ),
+            ListTile(
+              title: Text('Clima en mi ubicación'),
+              onTap: () async {
+                Navigator.pop(context); // Cierra el cajón de navegación
+                final position = await determinePosition();
+                final weatherBloc = WeatherBlocBloc()
+                  ..add(FetchWeather(position));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        _buildHomeScreen(position, weatherBloc),
+                  ),
+                );
+              },
+              leading: const Icon(Icons.cloud),
+            ),
+          ],
+        ),
+      ),
       body: myPosition == null
           ? const CircularProgressIndicator()
           : FlutterMap(
@@ -248,6 +294,13 @@ class _MapScreenState extends State<MapScreen> {
         colorEndAnimation: Colors.red,
         animatedIconData: AnimatedIcons.menu_close,
       ),
+    );
+  }
+
+  Widget _buildHomeScreen(Position position, WeatherBlocBloc bloc) {
+    return BlocProvider.value(
+      value: bloc,
+      child: const HomeScreen(),
     );
   }
 

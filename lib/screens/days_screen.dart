@@ -1,3 +1,8 @@
+import 'package:clima/bloc/weather_bloc_bloc.dart';
+import 'package:clima/screens/home_screen.dart';
+import 'package:clima/screens/map_screen.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
@@ -37,11 +42,75 @@ class _WeatherScreenState extends State<DayScreen> {
     }
   }
 
+  Future<void> _updateWeatherData(String city) async {
+    try {
+      List<Location> locations = await locationFromAddress(city);
+      if (locations.isNotEmpty) {
+        Location location = locations[0];
+        final weatherData = await getWeatherData(
+          location.latitude!,
+          location.longitude!,
+        );
+
+        setState(() {
+          _weatherData = weatherData;
+          _cityName = _weatherData!['city']['name'];
+        });
+      } else {
+        print('No se encontró la ciudad: $city');
+      }
+    } catch (e) {
+      print('Error: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Weather Forecast'),
+        title: Text('Pronóstico de los próximos 5 días'),
+      ),
+      drawer: Drawer(
+        child: ListView(
+          children: [
+            const UserAccountsDrawerHeader(
+                currentAccountPicture: CircleAvatar(
+                  backgroundImage: NetworkImage('https://i.pravatar.cc/300'),
+                ),
+                accountName: Text('Víctor Fernando Sánchez Alvarado'),
+                accountEmail: Text('20031003@itcelaya.edu.mx')),
+            ListTile(
+              title: Text('Mapa'),
+              onTap: () {
+                // Navega a map_screen.dart aquí
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => MapScreen(),
+                  ),
+                );
+              },
+              leading: const Icon(Icons.map),
+            ),
+            ListTile(
+              title: Text('Clima en mi ubicación'),
+              onTap: () async {
+                Navigator.pop(context); // Cierra el cajón de navegación
+                final position = await _determinePosition();
+                final weatherBloc = WeatherBlocBloc()
+                  ..add(FetchWeather(position));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        _buildHomeScreen(position, weatherBloc),
+                  ),
+                );
+              },
+              leading: const Icon(Icons.cloud),
+            ),
+          ],
+        ),
       ),
       body: _weatherData != null
           ? _buildWeatherContent()
@@ -73,7 +142,7 @@ class _WeatherScreenState extends State<DayScreen> {
               suffixIcon: Icon(Icons.search),
             ),
             onSubmitted: (city) {
-              // Lógica para buscar pronóstico de la ciudad ingresada
+              _updateWeatherData(city);
             },
           ),
           SizedBox(height: 16.0),
@@ -116,7 +185,39 @@ class _WeatherScreenState extends State<DayScreen> {
   }
 }
 
+Widget _buildHomeScreen(Position position, WeatherBlocBloc bloc) {
+  return BlocProvider.value(
+    value: bloc,
+    child: const HomeScreen(),
+  );
+}
+
 Future<Position> getCurrentLocation() async {
+  return await Geolocator.getCurrentPosition();
+}
+
+Future<Position> _determinePosition() async {
+  bool serviceEnabled;
+  LocationPermission permission;
+
+  serviceEnabled = await Geolocator.isLocationServiceEnabled();
+  if (!serviceEnabled) {
+    return Future.error('Los servicios de localización están desactivados.');
+  }
+
+  permission = await Geolocator.checkPermission();
+  if (permission == LocationPermission.denied) {
+    permission = await Geolocator.requestPermission();
+    if (permission == LocationPermission.denied) {
+      return Future.error('Los servicios de localización han sido denegados.');
+    }
+  }
+
+  if (permission == LocationPermission.deniedForever) {
+    return Future.error(
+        'Los servicios de localización han sido denegados para siempre.');
+  }
+
   return await Geolocator.getCurrentPosition();
 }
 

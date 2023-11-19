@@ -23,6 +23,11 @@ if (flutterVersionName == null) {
 }
 
 android {
+
+    lintOptions {
+        warning 'deprecation'
+    }
+    
     namespace "com.example.clima"
     compileSdkVersion flutter.compileSdkVersion
     ndkVersion flutter.ndkVersion
