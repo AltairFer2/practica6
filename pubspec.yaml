@@ -24,6 +24,9 @@ dependencies:
   flutter_slider_drawer: ^2.1.3
   http: ^0.13.1
   geocoding: ^2.0.1
+  sqflite: ^2.3.0
+  path_provider: ^2.1.1
+  material_text_fields: ^1.0.3
 
 dev_dependencies:
   flutter_test:
