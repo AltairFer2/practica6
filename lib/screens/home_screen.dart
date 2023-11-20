@@ -76,13 +76,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 accountName: Text('Víctor Fernando Sánchez Alvarado'),
                 accountEmail: Text('20031003@itcelaya.edu.mx')),
             ListTile(
-              title: const Text('Añadir Ciudad'),
-              leading: Icon(Icons.add),
-              onTap: () {
-                _showAddCityDialog(context);
-              },
-            ),
-            ListTile(
               title: Text('Mapa'),
               onTap: () {
                 // Navega a map_screen.dart aquí
