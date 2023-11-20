@@ -1,16 +1,37 @@
+import 'dart:convert';
 import 'dart:ui';
 
 import 'package:clima/bloc/weather_bloc_bloc.dart';
+import 'package:clima/database/location_db.dart';
+import 'package:clima/models/location_model.dart';
 import 'package:clima/screens/days_screen.dart';
 import 'package:clima/screens/map_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
+import 'package:material_text_fields/material_text_fields.dart';
+import 'package:http/http.dart' as http;
 
-class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({Key? key}) : super(key: key);
+
+  @override
+  _HomeScreenState createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  Map<String, dynamic>? _weatherData;
+  String? _cityName;
+  List<String> cityNames = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCityNames();
+  }
 
   Widget getWeatherIcon(int code) {
     switch (code) {
@@ -54,6 +75,13 @@ class HomeScreen extends StatelessWidget {
                 ),
                 accountName: Text('Víctor Fernando Sánchez Alvarado'),
                 accountEmail: Text('20031003@itcelaya.edu.mx')),
+            ListTile(
+              title: const Text('Añadir Ciudad'),
+              leading: Icon(Icons.add),
+              onTap: () {
+                _showAddCityDialog(context);
+              },
+            ),
             ListTile(
               title: Text('Mapa'),
               onTap: () {
@@ -361,6 +389,95 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _showDeleteCityDialog(String cityName) async {
+    return showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Eliminar Ciudad'),
+          content: Text('¿Estás seguro de que deseas eliminar $cityName?'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context); // Cierra el diálogo
+              },
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () async {
+                await _deleteCity(cityName);
+                Navigator.pop(context); // Cierra el diálogo
+              },
+              child: const Text('Eliminar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showDatabaseCitiesDialog(BuildContext context) async {
+    List<LocationModel> cities = await LocationDB().getLocations();
+
+    String citiesText = '';
+    for (LocationModel city in cities) {
+      citiesText +=
+          '${city.cityName}, Lat: ${city.latitude}, Lon: ${city.longitude}\n';
+    }
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Ciudades en la Base de Datos'),
+          content: Text(citiesText),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context); // Cierra el diálogo
+              },
+              child: Text('Cerrar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _loadCityNames() async {
+    try {
+      List<LocationModel> locations = await LocationDB().getLocations();
+      List<String> names =
+          locations.map((location) => location.cityName).toList();
+      setState(() {
+        cityNames = names;
+      });
+    } catch (e) {
+      print('Error al cargar nombres de ciudades: $e');
+    }
+  }
+
+  Future<void> _deleteCity(String cityName) async {
+    try {
+      await LocationDB().deleteLocation(cityName);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ciudad eliminada correctamente'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      _loadCityNames(); // Actualizar la lista después de eliminar
+    } catch (e) {
+      print('Error al eliminar ciudad: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al eliminar ciudad: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   Future<Position> _determinePosition() async {
     bool serviceEnabled;
     LocationPermission permission;
@@ -385,5 +502,143 @@ class HomeScreen extends StatelessWidget {
     }
 
     return await Geolocator.getCurrentPosition();
+  }
+
+  void _showAddCityDialog(BuildContext context) {
+    TextEditingController cityController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Añadir Ciudad'),
+          content: MaterialTextField(
+            controller: cityController,
+            labelText: 'Nombre de la Ciudad',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context); // Cierra el diálogo
+              },
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () async {
+                String cityName = cityController.text.trim();
+                if (cityName.isNotEmpty) {
+                  await _addCityToDatabase(cityName, context);
+                  Navigator.pop(context); // Cierra el cajón de navegación
+                  final position = await _determinePosition();
+                  final weatherBloc = WeatherBlocBloc()
+                    ..add(FetchWeather(position));
+                  // ignore: use_build_context_synchronously
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          _buildHomeScreen(position, weatherBloc),
+                    ),
+                  );
+                }
+              },
+              child: const Text('Añadir'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildHomeScreen(Position position, WeatherBlocBloc bloc) {
+    return BlocProvider.value(
+      value: bloc,
+      child: const HomeScreen(),
+    );
+  }
+
+  Future<void> _addCityToDatabase(String cityName, BuildContext context) async {
+    try {
+      List<Location> locations = await locationFromAddress(cityName);
+      if (locations.isNotEmpty) {
+        Location location = locations[0];
+        LocationModel newLocation = LocationModel(
+          cityName: cityName,
+          latitude: location.latitude!,
+          longitude: location.longitude!,
+        );
+        await LocationDB().insertLocation(newLocation);
+        // ignore: use_build_context_synchronously
+        Navigator.pop(context);
+        // ignore: use_build_context_synchronously
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Se insertó correctamente'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        // ignore: use_build_context_synchronously
+        Navigator.pop(context);
+        // ignore: use_build_context_synchronously
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se encontró la ciudad: $cityName'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      // ignore: use_build_context_synchronously
+      Navigator.pop(context);
+      // ignore: use_build_context_synchronously
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al añadir ciudad a la base de datos: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>> getForecastData(
+      double latitude, double longitude) async {
+    final apiKey =
+        '37dc66eac76ce609805ba132e8b6b700'; // Reemplaza con tu propia clave de API
+    final apiUrl = 'https://api.openweathermap.org/data/2.5/forecast';
+
+    final response = await http.get(
+      Uri.parse('$apiUrl?lat=$latitude&lon=$longitude&appid=$apiKey'),
+    );
+
+    if (response.statusCode == 200) {
+      final Map<String, dynamic> data = json.decode(response.body);
+      return data;
+    } else {
+      throw Exception(
+          'Error al cargar datos de pronóstico: ${response.statusCode}');
+    }
+  }
+
+  Future<void> _updateWeatherData(String city) async {
+    try {
+      List<Location> locations = await locationFromAddress(city);
+      if (locations.isNotEmpty) {
+        Location location = locations[0];
+        final forecastData = await getForecastData(
+          location.latitude!,
+          location.longitude!,
+        );
+
+        setState(() {
+          _weatherData = forecastData; // Assuming forecastData is a Map
+          _cityName = _weatherData!['city']['name'];
+        });
+      } else {
+        print('No se encontró la ciudad: $city');
+      }
+    } catch (e) {
+      print('Error: $e');
+    }
   }
 }
